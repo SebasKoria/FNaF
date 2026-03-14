@@ -6,6 +6,9 @@
 #include "GameFramework/Pawn.h"
 #include "MainCharacter.generated.h"
 
+class UInputMappingContext;
+class UInputAction;
+
 UENUM(BlueprintType)
 enum class EPlayerState : uint8
 {
@@ -23,6 +26,7 @@ class FNAF_API AMainCharacter : public APlayerController
 public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void BeginPlay() override;
+	virtual void SetupInputComponent() override;
 	
 	UFUNCTION(BlueprintImplementableEvent, Category = "Security UI")
 	void OnMonitorOpened();
@@ -33,6 +37,12 @@ public:
 protected:
 	UPROPERTY(BlueprintReadWrite, Category = "State")
 	EPlayerState CurrentState = EPlayerState::Idle;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputMappingContext* OfficeMappingContext;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* ClickAction;
 
 private:
 	class UOfficeMovementComponent* MovementComp;
@@ -43,4 +53,5 @@ private:
 
 	void HandleIdleState(float MouseX_Norm, float MouseY_Norm, float DeltaTime);
 	void HandleMonitorState(float MouseY_Norm);
+	void OnClick();
 };

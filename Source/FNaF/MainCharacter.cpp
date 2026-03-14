@@ -1,26 +1,57 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "MainCharacter.h"
-
 #include "OfficeMovementComponent.h"
 #include "Public/SecuritySystemComponent.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InteractionComponent.h"
 
 // Called when the game starts or when spawned
 void AMainCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	// Mostrar el mouse y configurar input para UI y Juego
+	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+	{
+		if (OfficeMappingContext)
+		{
+			Subsystem->AddMappingContext(OfficeMappingContext, 0);
+		}
+	}
+	
 	bShowMouseCursor = true;
 	const FInputModeGameAndUI InputMode;
 	SetInputMode(InputMode);
 
-	// Buscar el componente de movimiento en el Pawn que controlamos
 	OfficePawn = GetPawn();
 	if (OfficePawn)
 	{
 		MovementComp = OfficePawn->FindComponentByClass<UOfficeMovementComponent>();
 		SecurityComp = OfficePawn->FindComponentByClass<USecuritySystemComponent>(); 
+	}
+}
+
+void AMainCharacter::SetupInputComponent()
+{
+	Super::SetupInputComponent();
+	
+	if (UEnhancedInputComponent* EnhancedInputComp = Cast<UEnhancedInputComponent>(InputComponent))
+	{
+		if (ClickAction)
+		{
+			EnhancedInputComp->BindAction(ClickAction, ETriggerEvent::Started, this, &AMainCharacter::OnClick);
+		}
+	}
+}
+
+void AMainCharacter::OnClick()
+{
+	UE_LOG(LogTemp, Log, TEXT("InteractionSystem::Click action"));
+	
+	if (const auto InteractionComponent = GetPawn()->FindComponentByClass<UInteractionComponent>())
+	{
+		InteractionComponent->TryInteract(this);
 	}
 }
 

@@ -2,7 +2,8 @@
 
 
 #include "FNaF/Public/SecuritySystemComponent.h"
-#include "PowerManagerComponent.h"
+
+#include "PowerDrainComponent.h"
 
 USecuritySystemComponent::USecuritySystemComponent()
 {
@@ -13,40 +14,32 @@ void USecuritySystemComponent::OpenMonitor(APlayerController* PC, AActor* Office
 {
 	if (!PC || Cameras.IsEmpty()) return;
 	
-	if (UPowerManagerComponent* PowerComp = OfficePawn->FindComponentByClass<UPowerManagerComponent>())
+	if (const auto PowerDrainComponent = OfficePawn->FindComponentByClass<UPowerDrainComponent>())
 	{
-		PowerComp->IncreaseUsage(); // ¡Sube el gasto de energía!
+		PowerDrainComponent->StartUsingPower();
 	}
-
-	// Cambiar la vista a la última cámara seleccionada
+	
 	SwitchToCamera(PC, CurrentCameraIndex);
-
-	// Aquí más adelante llamaremos a tu UI para mostrar la estática/mapa
-	UE_LOG(LogTemp, Warning, TEXT("Monitor Abierto. Mostrando UI de cámaras."));
+	UE_LOG(LogTemp, Log, TEXT("SecuritySystemComponent::Monitor opened"));
 }
 
 void USecuritySystemComponent::CloseMonitor(APlayerController* PC, AActor* OfficePawn)
 {
 	if (!PC || !OfficePawn) return;
 	
-	if (UPowerManagerComponent* PowerComp = OfficePawn->FindComponentByClass<UPowerManagerComponent>())
+	if (const auto PowerDrainComponent = OfficePawn->FindComponentByClass<UPowerDrainComponent>())
 	{
-		PowerComp->DecreaseUsage(); // ¡Baja el gasto de energía!
+		PowerDrainComponent->StopUsingPower();
 	}
 
-	// Devolver la vista al jugador en la oficina
 	PC->SetViewTarget(OfficePawn);
-
-	// Aquí más adelante ocultaremos la UI del mapa
-	UE_LOG(LogTemp, Warning, TEXT("Monitor Cerrado. De vuelta a la oficina."));
+	UE_LOG(LogTemp, Log, TEXT("SecuritySystemComponent::Monitor closed"));
 }
 
 void USecuritySystemComponent::SwitchToCamera(APlayerController* PC, int32 CameraIndex)
 {
-	// Validar que el índice sea correcto
 	if (!PC || !Cameras.IsValidIndex(CameraIndex) || !Cameras[CameraIndex]) return;
 
-	// Cambiar la vista del jugador a esa cámara
 	PC->SetViewTarget(Cameras[CameraIndex]);
 	CurrentCameraIndex = CameraIndex;
 }
