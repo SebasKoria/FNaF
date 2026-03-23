@@ -17,6 +17,7 @@ public:
 	UOfficeMovementComponent();
 	
 	void UpdateRotation(float InputDirection, float DeltaTime);
+	void ResetRotation();
 
 protected:
 	

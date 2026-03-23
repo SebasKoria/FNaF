@@ -6,6 +6,9 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InteractionComponent.h"
+#include "PowerSubsystem.h"
+#include "TimeSubsystem.h"
+#include "Kismet/GameplayStatics.h"
 
 // Called when the game starts or when spawned
 void AMainCharacter::BeginPlay()
@@ -20,7 +23,17 @@ void AMainCharacter::BeginPlay()
 		}
 	}
 	
+	CachedPowerSubsystem = GetWorld()->GetSubsystem<UPowerSubsystem>();
+	if (CachedPowerSubsystem) CachedPowerSubsystem->OnBatteryDrained.AddDynamic(this, &AMainCharacter::HandleBatteryDrained);
+	
+	CachedTimeSubsystem = GetWorld()->GetSubsystem<UTimeSubsystem>();
+	if (CachedTimeSubsystem) CachedTimeSubsystem->OnHourChanged.AddDynamic(this, &AMainCharacter::HandleHourChange);
+	
+	OnGameOver.AddDynamic(this, &AMainCharacter::HandleGameOver);
 	bShowMouseCursor = true;
+	bCanToggleMonitor = true;
+	bIsInputEnabled = true;
+	
 	const FInputModeGameAndUI InputMode;
 	SetInputMode(InputMode);
 
@@ -30,6 +43,8 @@ void AMainCharacter::BeginPlay()
 		MovementComp = OfficePawn->FindComponentByClass<UOfficeMovementComponent>();
 		SecurityComp = OfficePawn->FindComponentByClass<USecuritySystemComponent>(); 
 	}
+	
+	if (MovementComp) MovementComp->ResetRotation();
 }
 
 void AMainCharacter::SetupInputComponent()
@@ -45,6 +60,16 @@ void AMainCharacter::SetupInputComponent()
 	}
 }
 
+void AMainCharacter::DisableCustomInput()
+{
+	bIsInputEnabled = false;
+}
+
+void AMainCharacter::ResetViewRotation()
+{
+	if (MovementComp) MovementComp->ResetRotation();
+}
+
 void AMainCharacter::OnClick()
 {
 	UE_LOG(LogTemp, Log, TEXT("InteractionSystem::Click action"));
@@ -55,26 +80,23 @@ void AMainCharacter::OnClick()
 	}
 }
 
-// Called every frame
 void AMainCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	if (!bIsInputEnabled) return;
 
-	// 1. Obtener tamaño de pantalla y posición del mouse
 	int32 ViewportSizeX, ViewportSizeY;
 	GetViewportSize(ViewportSizeX, ViewportSizeY);
 
 	float MouseX, MouseY;
 	if (!GetMousePosition(MouseX, MouseY) || ViewportSizeX == 0 || ViewportSizeY == 0)
 	{
-		return; // Salir si no hay mouse o la pantalla no es válida
+		return;
 	}
 
-	// 2. Normalizar coordenadas (0.0 a 1.0)
-	float NormalizedX = MouseX / (float)ViewportSizeX;
-	float NormalizedY = MouseY / (float)ViewportSizeY;
+	const float NormalizedX = MouseX / static_cast<float>(ViewportSizeX);
+	const float NormalizedY = MouseY / static_cast<float>(ViewportSizeY);
 
-	// 3. Máquina de Estados
 	switch (CurrentState)
 	{
 	case EPlayerState::Idle:
@@ -85,69 +107,120 @@ void AMainCharacter::Tick(float DeltaTime)
 		HandleMonitorState(NormalizedY);
 		break;
 
-	case EPlayerState::WearingMask:
-		// Lógica similar a Idle pero sin abrir monitor
-		break;
-
 	case EPlayerState::Transitioning:
-		// No hacer nada, esperar a que termine la animación
 		break;
 	}
 }
 
 void AMainCharacter::HandleIdleState(float MouseX_Norm, float MouseY_Norm, float DeltaTime)
 {
-	// --- LÓGICA DE CÁMARA HORIZONTAL ---
 	float TurnInput = 0.0f;
-	if (MouseX_Norm < 0.2f)      TurnInput = -1.0f; // Izquierda
-	else if (MouseX_Norm > 0.8f) TurnInput = 1.0f;  // Derecha
+	if (MouseX_Norm < 0.2f) TurnInput = -1.0f;
+	else if (MouseX_Norm > 0.8f) TurnInput = 1.0f;
 
-	// Enviar el input al componente
 	if (MovementComp)
 	{
 		MovementComp->UpdateRotation(TurnInput, DeltaTime);
 	}
 
-	// --- LÓGICA DE MONITOR VERTICAL ---
-	if (MouseY_Norm > 0.9f) // El mouse está casi tocando el borde inferior
+	if (bCanUseMonitor)
 	{
-		if (CanToggleMonitor)
+		if (MouseY_Norm > 0.9f)
 		{
-			if (SecurityComp)
+			if (bCanToggleMonitor)
 			{
-				CanToggleMonitor = false;
-				SecurityComp->OpenMonitor(this, OfficePawn);
-				CurrentState = EPlayerState::UsingMonitor; // ¡Cambiamos de estado!
+				if (SecurityComp)
+				{
+					bCanToggleMonitor = false;
+					SecurityComp->OpenMonitor(this, OfficePawn);
+					CurrentState = EPlayerState::UsingMonitor;
 				
-				OnMonitorOpened();
+					OnMonitorOpened();
+					OnMonitorStateChanged.Broadcast(true);
+				}
 			}
 		}
-	}
-	else
-	{
-		CanToggleMonitor = true;
+		else
+		{
+			bCanToggleMonitor = true;
+		}
 	}
 }
 
 void AMainCharacter::HandleMonitorState(float MouseY_Norm)
 {
-	// En este estado no movemos la cámara. Solo escuchamos si quiere salir.
 	if (MouseY_Norm > 0.9f) 
 	{
-		if (CanToggleMonitor)
+		if (bCanToggleMonitor)
 		{
 			if (SecurityComp)
 			{
-				CanToggleMonitor = false;
+				bCanToggleMonitor = false;
 				SecurityComp->CloseMonitor(this, OfficePawn);
-				CurrentState = EPlayerState::Idle; // ¡Volvemos a la oficina!
+				CurrentState = EPlayerState::Idle;
 				
 				OnMonitorClosed();
+				OnMonitorStateChanged.Broadcast(false);
 			}
 		}
 	}
 	else
 	{
-		CanToggleMonitor = true;
+		bCanToggleMonitor = true;
+	}
+}
+
+void AMainCharacter::ForceCloseMonitor()
+{
+	if (SecurityComp)
+	{
+		bCanToggleMonitor = false;
+		SecurityComp->CloseMonitor(this, OfficePawn);
+		CurrentState = EPlayerState::Idle;
+				
+		OnMonitorClosed();
+		OnMonitorStateChanged.Broadcast(false);
+	}
+	
+	bCanUseMonitor = false;
+}
+
+// TODO: Implement in a GameSubsystem
+// TODO: Make this function actually change to the next level and make another function that returns to main menu on GameOver
+void AMainCharacter::ChangeToNextLevel()
+{
+	const FName LevelName = FName(*UGameplayStatics::GetCurrentLevelName(GetWorld()));
+	UGameplayStatics::OpenLevel(GetWorld(), LevelName);
+}
+
+void AMainCharacter::HandleGameOver()
+{
+	// TODO: Implement GameOver screen
+	OnGameOver.RemoveDynamic(this, &AMainCharacter::HandleGameOver);
+	ChangeToNextLevel();
+}
+
+void AMainCharacter::HandleBatteryDrained()
+{
+	bCanUseMonitor = false;
+	OnMonitorClosed();
+	if (CachedPowerSubsystem) CachedPowerSubsystem->OnBatteryDrained.RemoveDynamic(this, &AMainCharacter::HandleBatteryDrained);
+	
+	// TODO: This is a placeholder power outage
+	FTimerHandle TimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &AMainCharacter::HandleGameOver, 5.0f, false);
+}
+
+void AMainCharacter::HandleHourChange(int NewHour)
+{
+	if (NewHour >= 6)
+	{
+		// TODO: Implement 6am win screen
+		DisableCustomInput();
+		if (CachedTimeSubsystem) CachedTimeSubsystem->OnHourChanged.AddDynamic(this, &AMainCharacter::HandleHourChange);
+		
+		// TODO: Go to next level
+		FTimerHandle TimerHandle;
+		GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &AMainCharacter::HandleGameOver, 5.0f, false);
 	}
 }
