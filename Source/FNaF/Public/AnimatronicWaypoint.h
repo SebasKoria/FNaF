@@ -18,5 +18,8 @@ public:
 	ERooms RoomTag;
 	
 	UPROPERTY(EditAnywhere, Category="Location")
-	TArray<EAnimatronicID> AllowedAnimatronics;
+	EAnimatronicID AllowedAnimatronic;
+	
+	UPROPERTY(EditAnywhere, Category="Location")
+	UAnimSequence* Pose;
 };

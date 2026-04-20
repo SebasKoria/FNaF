@@ -12,7 +12,10 @@ USecuritySystemComponent::USecuritySystemComponent()
 
 void USecuritySystemComponent::OpenMonitor(APlayerController* PC, AActor* OfficePawn)
 {
+	if (bIsMonitorOpen) return;
 	if (!PC || Cameras.IsEmpty()) return;
+	
+	bIsMonitorOpen = true;
 	
 	if (const auto PowerDrainComponent = OfficePawn->FindComponentByClass<UPowerDrainComponent>())
 	{
@@ -20,12 +23,14 @@ void USecuritySystemComponent::OpenMonitor(APlayerController* PC, AActor* Office
 	}
 	
 	SwitchToCamera(PC, CurrentCameraIndex);
-	UE_LOG(LogTemp, Log, TEXT("SecuritySystemComponent::Monitor opened"));
 }
 
 void USecuritySystemComponent::CloseMonitor(APlayerController* PC, AActor* OfficePawn)
 {
+	if (!bIsMonitorOpen) return;
 	if (!PC || !OfficePawn) return;
+	
+	bIsMonitorOpen = false;
 	
 	if (const auto PowerDrainComponent = OfficePawn->FindComponentByClass<UPowerDrainComponent>())
 	{
@@ -33,7 +38,6 @@ void USecuritySystemComponent::CloseMonitor(APlayerController* PC, AActor* Offic
 	}
 
 	PC->SetViewTarget(OfficePawn);
-	UE_LOG(LogTemp, Log, TEXT("SecuritySystemComponent::Monitor closed"));
 }
 
 void USecuritySystemComponent::SwitchToCamera(APlayerController* PC, int32 CameraIndex)

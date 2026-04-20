@@ -26,8 +26,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "AI")
 	TMap<ERooms, FRoomConnections> RoomConnections;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Poses")
-	TMap<ERooms, UAnimSequence*> RoomPoses;
+	UPROPERTY(BlueprintReadOnly, Category = "AI")
+	ERooms CurrentRoom;
 };
 
 
@@ -39,9 +39,6 @@ class FNAF_API URoamingState : public UAnimatronicState
 public:
 	virtual void EnterState(AAnimatronic* OwnerAnimatronic) override;
 	virtual void ExitState() override;
-	
-	UPROPERTY(BlueprintReadOnly, Category = "AI")
-	ERooms CurrentRoom;
 
 private:
 	
@@ -103,6 +100,4 @@ private:
 	
 	UPROPERTY()
 	ARoamingAnimatronic* RoamingAnimatronic;
-	
-	void Jumpscare();
 };

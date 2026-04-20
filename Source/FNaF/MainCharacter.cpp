@@ -174,12 +174,15 @@ void AMainCharacter::ForceCloseMonitor()
 {
 	if (SecurityComp)
 	{
-		bCanToggleMonitor = false;
-		SecurityComp->CloseMonitor(this, OfficePawn);
-		CurrentState = EPlayerState::Idle;
+		if (SecurityComp->GetIsMonitorOpen())
+		{
+			bCanToggleMonitor = false;
+			SecurityComp->CloseMonitor(this, OfficePawn);
+			CurrentState = EPlayerState::Idle;
 				
-		OnMonitorClosed();
-		OnMonitorStateChanged.Broadcast(false);
+			OnMonitorClosed();
+			OnMonitorStateChanged.Broadcast(false);
+		}
 	}
 	
 	bCanUseMonitor = false;

@@ -41,10 +41,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Info")
 	USkeletalMeshComponent* MeshComp;
 	
-	UPROPERTY(EditDefaultsOnly, Category = "AI")
+	UPROPERTY(EditAnywhere, Category = "AI")
 	float AILevel;
 	
-	UPROPERTY(EditDefaultsOnly, Category = "AI")
+	UPROPERTY(EditAnywhere, Category = "AI")
 	float MovingAttemptTime;
 	
 	UPROPERTY(EditAnywhere, Category = "AI")
@@ -53,16 +53,26 @@ public:
 	UPROPERTY(EditAnywhere, Category = "AI")
 	float AttackTime = 10.0f;
 	
-	UPROPERTY(EditDefaultsOnly, Category = "AI")
+	UPROPERTY(EditAnywhere, Category = "AI")
 	TSubclassOf<UAnimatronicState> InitialState;
 	
 	UPROPERTY(EditAnywhere, Category = "Environment")
 	ADoorActor* BlockingDoor;
 	
+	UPROPERTY(EditAnywhere, Category = "Jumpscare")
+	UAnimSequence* JumpscareAnimation;
+	
+	UPROPERTY(EditAnywhere, Category = "Jumpscare")
+	FVector JumpscareLocation;
+	
 	UPROPERTY(BlueprintReadOnly, Category = "AI")
 	UAnimatronicState* CurrentState;
 	
-protected:
+	UPROPERTY(BlueprintReadOnly, Category = "AI")
+	UAnimSequence* CurrentPose;
+	
+	UFUNCTION()
+	void Jumpscare();
 	
 private:
 	

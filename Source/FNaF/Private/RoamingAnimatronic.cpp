@@ -50,17 +50,25 @@ void URoamingState::TryToMove()
 {
 	if (FMath::RandRange(1, 20) <= Animatronic->AILevel)
 	{
-		TArray<ERooms> PossibleRooms = RoamingAnimatronic->RoomConnections[CurrentRoom].ConnectedRooms;
-		
-		const int Tries = (Animatronic->AILevel + 5) / 6;
-		int NextRoomIndex = 0;
-		
-		for (auto It = 0; It < Tries; ++It)
+		if (CurrentWaypoint)
 		{
-			NextRoomIndex = FMath::Max(NextRoomIndex, FMath::RandRange(0, PossibleRooms.Num() - 1));
-		}
+			if (RoamingAnimatronic->RoomConnections.Contains(RoamingAnimatronic->CurrentRoom))
+			{
+				TArray<ERooms> PossibleRooms = RoamingAnimatronic->RoomConnections[RoamingAnimatronic->CurrentRoom].ConnectedRooms;
+				if (PossibleRooms.Num() > 0)
+				{
+					const int Tries = (Animatronic->AILevel + 5) / 6;
+					int NextRoomIndex = 0;
 		
-		MoveToRoom(PossibleRooms[NextRoomIndex]);
+					for (auto It = 0; It < Tries; ++It)
+					{
+						NextRoomIndex = FMath::Max(NextRoomIndex, FMath::RandRange(0, PossibleRooms.Num() - 1));
+					}
+		
+					MoveToRoom(PossibleRooms[NextRoomIndex]);
+				}
+			}
+		}
 	}
 }
 
@@ -69,18 +77,21 @@ void URoamingState::MoveToRoom(const ERooms Room)
 	TArray<AAnimatronicWaypoint*> PossibleWaypoints;
 	if (GetPossibleWaypoints(Room, PossibleWaypoints))
 	{
-		AAnimatronicWaypoint* NextWaypoint = PossibleWaypoints[FMath::RandRange(0, PossibleWaypoints.Num() - 1)];
-		CurrentWaypoint = NextWaypoint;
-		
-		Animatronic->SetActorLocation(NextWaypoint->GetActorLocation());
-		Animatronic->SetActorRotation(NextWaypoint->GetActorRotation());
-		
-		CurrentRoom = Room;
-		
-		if (CurrentRoom == ERooms::WestDoor || CurrentRoom == ERooms::EastDoor)
+		if (PossibleWaypoints.Num() > 0)
 		{
-			GetWorld()->GetTimerManager().ClearTimer(TimerHandle);
-			Animatronic->ChangeState(UAtDoorState::StaticClass());
+			AAnimatronicWaypoint* NextWaypoint = PossibleWaypoints[FMath::RandRange(0, PossibleWaypoints.Num() - 1)];
+			CurrentWaypoint = NextWaypoint;
+		
+			RoamingAnimatronic->SetActorLocation(NextWaypoint->GetActorLocation());
+			RoamingAnimatronic->SetActorRotation(NextWaypoint->GetActorRotation());
+			RoamingAnimatronic->CurrentRoom = Room;
+			RoamingAnimatronic->CurrentPose = CurrentWaypoint->Pose;
+		
+			if (RoamingAnimatronic->CurrentRoom == ERooms::WestDoor || RoamingAnimatronic->CurrentRoom == ERooms::EastDoor)
+			{
+				GetWorld()->GetTimerManager().ClearTimer(TimerHandle);
+				Animatronic->ChangeState(UAtDoorState::StaticClass());
+			}
 		}
 	}
 }
@@ -92,7 +103,7 @@ bool URoamingState::GetPossibleWaypoints(const ERooms Room, TArray<AAnimatronicW
 		for (TActorIterator<AAnimatronicWaypoint> It(World); It; ++It)
 		{
 			AAnimatronicWaypoint* Waypoint = *It;
-			if (Waypoint->RoomTag == Room && Waypoint->AllowedAnimatronics.Contains(Animatronic->AnimatronicID))
+			if (Waypoint->RoomTag == Room && Waypoint->AllowedAnimatronic == Animatronic->AnimatronicID)
 			{
 				if (CurrentWaypoint != Waypoint)
 				{
@@ -208,52 +219,30 @@ void UInsideOfficeState::EnterState(AAnimatronic* OwnerAnimatronic)
 		
 		GetWorld()->GetTimerManager().SetTimer(
 			TimerHandle,
-			this,
-			&UInsideOfficeState::Jumpscare,
+			FTimerDelegate::CreateLambda([this]()
+			{
+				if (CachedPlayer)
+				{
+					// Closing the monitor triggers the animatronic's jumpscare, so we just force them to close it
+					CachedPlayer->ForceCloseMonitor();
+				}
+			}),
 			Animatronic->AttackTime,
 			false
 			);
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("Couldn't find a player"))
-	}
-	
 }
 
 void UInsideOfficeState::HandleMonitorChanged(bool bIsMonitorOpen)
 {
 	if (!bIsMonitorOpen)
 	{
-		Jumpscare();
+		Animatronic->Jumpscare();
 	}
-}
-
-void UInsideOfficeState::Jumpscare()
-{
-	Animatronic->SetActorLocation(FVector(0,2025,0));  // Hardcoded location (center of the office)
-	
-	if (CachedPlayer)
-	{
-		CachedPlayer->ForceCloseMonitor();
-		CachedPlayer->ResetViewRotation();
-		CachedPlayer->DisableCustomInput();
-	}
-	
-	GetWorld()->GetTimerManager().ClearTimer(TimerHandle);
-	GetWorld()->GetTimerManager().SetTimer(
-			TimerHandle,
-			FTimerDelegate::CreateLambda([this]()
-			{
-				if (CachedPlayer) CachedPlayer->OnGameOver.Broadcast();
-			}),
-			3.0f,
-			false
-			);
 }
 
 void UInsideOfficeState::ExitState()
 {
-	//CachedPlayer->OnMonitorStateChanged.RemoveDynamic(this, &UInsideOfficeState::HandleMonitorChanged);
+	CachedPlayer->OnMonitorStateChanged.RemoveDynamic(this, &UInsideOfficeState::HandleMonitorChanged);
 	Super::ExitState();
 }

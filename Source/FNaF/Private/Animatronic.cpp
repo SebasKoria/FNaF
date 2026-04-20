@@ -5,16 +5,21 @@
 #include "AnimatronicState.h"
 #include "PowerSubsystem.h"
 #include "TimeSubsystem.h"
+#include "FNaF/MainCharacter.h"
+#include "Kismet/GameplayStatics.h"
 
 
 AAnimatronic::AAnimatronic()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	MeshComp = CreateDefaultSubobject<USkeletalMeshComponent>(FName("MeshComp"));
+	RootComponent = MeshComp;
 }
 
 void AAnimatronic::BeginPlay()
 {
+  Super::BeginPlay();
+  
 	if (InitialState)
 	{
 		ChangeState(InitialState);
@@ -36,7 +41,6 @@ void AAnimatronic::BeginPlay()
 void AAnimatronic::Tick( float DeltaTime )
 {
 	Super::Tick( DeltaTime );
-	UE_LOG(LogTemp, Log, TEXT("Tick"));
 	if (CurrentState)
 	{
 		CurrentState->UpdateState(DeltaTime);
@@ -89,4 +93,29 @@ void AAnimatronic::ChangeState(TSubclassOf<UAnimatronicState> NewState)
 		CurrentState = NewObject<UAnimatronicState>(this, NewState);
 		CurrentState->EnterState(this);
 	}
+}
+
+void AAnimatronic::Jumpscare()
+{
+	SetActorLocation(JumpscareLocation);
+	SetActorRotation(FRotator(0,0,0));
+	
+	auto Player = Cast<AMainCharacter>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
+	
+	if (Player)
+	{
+		Player->ResetViewRotation();
+		Player->DisableCustomInput();
+	}
+	
+	FTimerHandle TimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(
+		TimerHandle,
+		FTimerDelegate::CreateLambda([Player]()
+		{
+			if (Player) Player->OnGameOver.Broadcast();
+		}),
+		3.0f,
+		false
+		);
 }
